@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nyay.AI — Legal Case Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── reset & base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --ink:       #0f0e0c;
+  --paper:     #f5f1e8;
+  --cream:     #ede8da;
+  --gold:      #b5882a;
+  --gold-lt:   #d4a94a;
+  --rust:      #8b3a2a;
+  --sage:      #3d5a4c;
+  --muted:     #7a7060;
+  --border:    #c8c0aa;
+  --white:     #fdfcf8;
+  --shadow:    rgba(15,14,12,.12);
+  --radius:    6px;
+  --mono:      'JetBrains Mono', monospace;
+  --serif:     'Playfair Display', Georgia, serif;
+  --sans:      'Inter', system-ui, sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  grid-template-rows: 56px 1fr;
+}
+
+/* ── header ───────────────────────────────────────────────── */
+header {
+  grid-column: 1/-1;
+  background: var(--ink);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 12px;
+  border-bottom: 2px solid var(--gold);
+}
+
+.logo {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--gold-lt);
+  letter-spacing: .5px;
+}
+.logo em { color: var(--white); font-style: normal; }
+
+.tagline {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-left: 4px;
+  margin-top: 2px;
+}
+
+.header-badge {
+  margin-left: auto;
+  background: var(--sage);
+  color: #a8d4bf;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+/* ── sidebar ──────────────────────────────────────────────── */
+aside {
+  background: var(--cream);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-section {
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sidebar-section:last-child { border-bottom: none; flex: 1; overflow-y: auto; }
+
+.sidebar-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+/* Upload area */
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  background: var(--white);
+  position: relative;
+}
+.upload-area:hover, .upload-area.drag-over {
+  border-color: var(--gold);
+  background: #fdf7e8;
+}
+.upload-area input[type=file] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+}
+.upload-icon { font-size: 28px; margin-bottom: 8px; }
+.upload-text { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.upload-text strong { color: var(--ink); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-family: var(--sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .15s;
+}
+.btn-primary { background: var(--ink); color: var(--white); }
+.btn-primary:hover { background: #2a2820; }
+.btn-gold { background: var(--gold); color: var(--white); width: 100%; justify-content: center; margin-top: 10px; }
+.btn-gold:hover { background: var(--gold-lt); }
+.btn-sm { padding: 5px 10px; font-size: 11px; }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--white); color: var(--ink); }
+.btn-danger { background: transparent; color: var(--rust); border: 1px solid #d9a090; }
+.btn-danger:hover { background: #fff0ed; }
+
+/* Case list */
+.case-list { display: flex; flex-direction: column; gap: 8px; }
+
+.case-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.case-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px var(--shadow); }
+.case-card.active { border-color: var(--gold); border-left: 3px solid var(--gold); background: #fdf7e8; }
+
+.case-name { font-size: 12px; font-weight: 600; line-height: 1.4; margin-bottom: 4px; color: var(--ink); }
+.case-meta { font-size: 10px; color: var(--muted); font-family: var(--mono); }
+.case-court { color: var(--sage); font-weight: 500; }
+.case-actions { display: flex; gap: 4px; margin-top: 8px; }
+
+.empty-state { text-align: center; padding: 30px 16px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.empty-state .empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+/* ── main panel ───────────────────────────────────────────── */
+main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--white);
+  padding: 0 24px;
+  gap: 2px;
+}
+.tab {
+  padding: 14px 18px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab .tab-icon { font-size: 15px; }
+
+/* Tab content panels */
+.tab-panels { flex: 1; overflow: hidden; display: grid; }
+.tab-panel { display: none; flex-direction: column; overflow-y: auto; padding: 28px; gap: 20px; }
+.tab-panel.active { display: flex; }
+
+/* Search / QA panel */
+.search-box {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.input-wrap { flex: 1; position: relative; }
+.input-wrap textarea, .input-wrap input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 14px;
+  background: var(--white);
+  color: var(--ink);
+  resize: none;
+  transition: border-color .15s;
+}
+.input-wrap textarea:focus, .input-wrap input:focus {
+  outline: none;
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(181,136,42,.1);
+}
+.input-hint { font-size: 11px; color: var(--muted); margin-top: 6px; font-family: var(--mono); }
+
+/* Answer display */
+.answer-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--sage);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  display: none;
+}
+.answer-card.visible { display: block; }
+.answer-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--sage);
+  margin-bottom: 12px;
+}
+.answer-text { font-size: 14px; line-height: 1.75; color: var(--ink); }
+.answer-text h2, .answer-text h3 { font-family: var(--serif); color: var(--ink); margin: 16px 0 8px; }
+.answer-text h2 { font-size: 18px; }
+.answer-text h3 { font-size: 15px; }
+.answer-text ul, .answer-text ol { padding-left: 20px; margin: 8px 0; }
+.answer-text li { margin: 4px 0; }
+.answer-text strong { color: var(--ink); }
+.answer-text em { color: var(--rust); }
+.answer-text code { font-family: var(--mono); font-size: 12px; background: var(--cream); padding: 2px 6px; border-radius: 3px; }
+.answer-text hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.answer-text blockquote { border-left: 3px solid var(--gold); padding-left: 14px; color: var(--muted); font-style: italic; margin: 12px 0; }
+
+/* Sources */
+.sources-header {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.source-item {
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.source-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.source-meta { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.source-score {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--sage);
+  color: #a8d4bf;
+  padding: 2px 7px;
+  border-radius: 3px;
+}
+.source-text { color: var(--ink); line-height: 1.6; }
+.source-section { color: var(--gold); font-weight: 600; margin-right: 8px; }
+
+/* Summary panel */
+.summary-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+}
+
+/* Similar cases panel */
+.similar-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: all .15s;
+}
+.similar-card:hover { border-color: var(--gold); box-shadow: 0 2px 8px var(--shadow); }
+.similarity-bar-wrap { width: 60px; flex-shrink: 0; text-align: center; }
+.similarity-pct { font-size: 15px; font-weight: 700; color: var(--sage); font-family: var(--mono); }
+.similarity-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+.similar-info { flex: 1; }
+.similar-name { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 4px; font-family: var(--serif); }
+.similar-court { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+/* Loading spinner */
+.spinner {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toast */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--ink);
+  color: var(--white);
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all .25s;
+  z-index: 999;
+  max-width: 340px;
+}
+#toast.show { opacity: 1; transform: translateY(0); }
+#toast.error { background: var(--rust); }
+#toast.success { background: var(--sage); }
+
+/* Progress bar */
+.progress-wrap { margin-top: 10px; display: none; }
+.progress-wrap.visible { display: block; }
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--gold);
+  border-radius: 2px;
+  animation: progress 2s ease-in-out infinite;
+}
+@keyframes progress {
+  0% { width: 0%; margin-left: 0; }
+  50% { width: 70%; margin-left: 15%; }
+  100% { width: 0%; margin-left: 100%; }
+}
+.progress-status { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 6px; }
+
+/* Filter row */
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.filter-row label { white-space: nowrap; }
+.filter-row select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.filter-row select:focus { outline: none; border-color: var(--gold); }
+
+/* No case selected */
+.no-case-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 30px;
+  text-align: center;
+  color: var(--muted);
+  gap: 12px;
+  flex: 1;
+}
+.no-case-msg .big-icon { font-size: 48px; opacity: .4; }
+.no-case-msg p { font-size: 13px; line-height: 1.7; }
+
+/* Quick prompts */
+.quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; }
+.qp-btn {
+  padding: 6px 12px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .15s;
+  font-family: var(--sans);
+}
+.qp-btn:hover { border-color: var(--gold); color: var(--gold); background: #fdf7e8; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  body { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+  aside { max-height: 50vh; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <div class="logo"><em>Nyay</em>.AI</div>
+    <div class="tagline">Legal Case Intelligence · India</div>
+  </div>
+  <div class="header-badge">⚖️ Beta v1.0</div>
+</header>
+
+<!-- SIDEBAR -->
+<aside>
+
+  <!-- Upload Section -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">📎 Upload Cases</div>
+    <div class="upload-area" id="uploadArea">
+      <input type="file" id="fileInput" accept=".pdf" multiple>
+      <div class="upload-icon">📄</div>
+      <div class="upload-text">
+        <strong>Drop PDF here</strong><br>
+        or click to browse<br>
+        <span style="font-size:10px; color:var(--muted);">Indian court judgments · petitions · orders</span>
+      </div>
+    </div>
+    <div class="progress-wrap" id="uploadProgress">
+      <div class="progress-bar"><div class="progress-fill"></div></div>
+      <div class="progress-status" id="progressStatus">Uploading…</div>
+    </div>
+  </div>
+
+  <!-- Case List Section -->
+  <div class="sidebar-section">
+    <div class="sidebar-label">📚 Indexed Cases <span id="caseCount" style="color:var(--gold);"></span></div>
+    <div class="case-list" id="caseList">
+      <div class="empty-state">
+        <div class="empty-icon">🏛️</div>
+        No cases indexed yet.<br>Upload a PDF to begin.
+      </div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- MAIN PANEL -->
+<main>
+  <div class="tabs">
+    <div class="tab active" data-tab="search"><span class="tab-icon">🔍</span> Search & Q&A</div>
+    <div class="tab" data-tab="summary"><span class="tab-icon">📝</span> Summarize</div>
+    <div class="tab" data-tab="similar"><span class="tab-icon">🔗</span> Similar Cases</div>
+  </div>
+
+  <div class="tab-panels">
+
+    <!-- SEARCH TAB -->
+    <div class="tab-panel active" id="panel-search">
+      <div>
+        <div class="search-box">
+          <div class="input-wrap" style="flex:1">
+            <textarea id="questionInput" rows="2" placeholder="Ask anything about your cases…
+e.g. What are the grounds for bail in NDPS cases?"></textarea>
+            <div class="input-hint">
+              Scope:
+              <select id="scopeSelect" style="margin-left:4px; padding:2px 6px; border:1px solid var(--border); border-radius:3px; font-size:11px; background:var(--white);">
+                <option value="">All cases</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="askQuestion()">
+            ⚡ Ask
+          </button>
+        </div>
+
+        <div class="quick-prompts" style="margin-top:12px;" id="quickPrompts">
+          <button class="qp-btn" onclick="setQuestion('Summarize the key legal arguments made')">📋 Key arguments</button>
+          <button class="qp-btn" onclick="setQuestion('What was the final judgment and outcome?')">⚖️ Judgment</button>
+          <button class="qp-btn" onclick="setQuestion('What legal principles were established?')">📖 Legal principles</button>
+          <button class="qp-btn" onclick="setQuestion('What arguments worked for the petitioner?')">✅ Winning arguments</button>
+          <button class="qp-btn" onclick="setQuestion('What sections of law were cited?')">📜 Cited laws</button>
+        </div>
+      </div>
+
+      <div class="answer-card" id="answerCard">
+        <div class="answer-label">🤖 AI Answer</div>
+        <div class="answer-text" id="answerText"></div>
+      </div>
+
+      <div id="sourcesSection" style="display:none">
+        <div class="sources-header">📑 Source Excerpts</div>
+        <div id="sourcesList"></div>
+      </div>
+    </div>
+
+    <!-- SUMMARY TAB -->
+    <div class="tab-panel" id="panel-summary">
+      <div class="no-case-msg" id="summaryNoCaseMsg">
+        <div class="big-icon">📝</div>
+        <p>Select a case from the sidebar<br>then generate a structured summary.</p>
+      </div>
+      <div id="summaryContent" style="display:none">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:4px;">
+          <span id="summaryTitle" style="font-family:var(--serif); font-size:18px; font-weight:700;"></span>
+          <button class="btn btn-gold btn-sm" onclick="generateSummary()" style="width:auto;">
+            📝 Generate Summary
+          </button>
+        </div>
+        <div class="answer-card visible" id="summaryCard" style="display:none;">
+          <div class="answer-label">📄 Case Summary</div>
+          <div class="answer-text" id="summaryText"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIMILAR CASES TAB -->
+    <div class="tab-panel" id="panel-similar">
+      <div class="no-case-msg" id="similarNoCaseMsg">
+        <div class="big-icon">🔗</div>
+        <p>Select a case from the sidebar<br>to find semantically similar cases.</p>
+      </div>
+      <div id="similarContent" style="display:none">
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:4px;">
+          <span id="similarTitle" style="font-family:var(--serif); font-size:18px; font-weight:700;"></span>
+          <button class="btn btn-gold btn-sm" onclick="findSimilar()" style="width:auto;">
+            🔗 Find Similar Cases
+          </button>
+        </div>
+        <div id="similarList" style="display:flex; flex-direction:column; gap:12px; margin-top:16px;"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* ── state ───────────────────────────────────────────────── */
+const API = '';   // same origin
+let cases = [];
+let selectedCaseId = null;
+
+/* ── init ─────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  loadCases();
+  setupDragDrop();
+  setupTabs();
+
+  document.getElementById('fileInput').addEventListener('change', e => {
+    [...e.target.files].forEach(file => uploadFile(file));
+    e.target.value = '';
+  });
+
+  document.getElementById('questionInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askQuestion(); }
+  });
+});
+
+/* ── tabs ─────────────────────────────────────────────────── */
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+      updatePanelState();
+    });
+  });
+}
+
+function updatePanelState() {
+  const hasSel = !!selectedCaseId;
+  const selectedCase = cases.find(c => c.id === selectedCaseId);
+
+  // Summary tab
+  document.getElementById('summaryNoCaseMsg').style.display = hasSel ? 'none' : 'flex';
+  document.getElementById('summaryContent').style.display   = hasSel ? 'block' : 'none';
+  if (hasSel && selectedCase) {
+    document.getElementById('summaryTitle').textContent = selectedCase.metadata?.case_name || selectedCase.filename;
+  }
+
+  // Similar tab
+  document.getElementById('similarNoCaseMsg').style.display = hasSel ? 'none' : 'flex';
+  document.getElementById('similarContent').style.display   = hasSel ? 'block' : 'none';
+  if (hasSel && selectedCase) {
+    document.getElementById('similarTitle').textContent = selectedCase.metadata?.case_name || selectedCase.filename;
+  }
+}
+
+/* ── upload ───────────────────────────────────────────────── */
+function setupDragDrop() {
+  const area = document.getElementById('uploadArea');
+  area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('drag-over'); });
+  area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('drag-over');
+    [...e.dataTransfer.files].filter(f => f.name.endsWith('.pdf')).forEach(uploadFile);
+  });
+}
+
+async function uploadFile(file) {
+  const progress = document.getElementById('uploadProgress');
+  const status   = document.getElementById('progressStatus');
+  progress.classList.add('visible');
+  status.textContent = `Processing ${file.name}…`;
+
+  const fd = new FormData();
+  fd.append('file', file);
+
+  try {
+    const resp = await fetch(`${API}/upload`, { method: 'POST', body: fd });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || 'Upload failed');
+    toast(`✅ Indexed: ${data.metadata?.case_name || file.name}`, 'success');
+    await loadCases();
+    selectCase(data.case_id);
+  } catch (err) {
+    toast(`❌ ${err.message}`, 'error');
+  } finally {
+    progress.classList.remove('visible');
+  }
+}
+
+/* ── cases ───────────────────────────────────────────────── */
+async function loadCases() {
+  try {
+    const resp = await fetch(`${API}/cases`);
+    cases = await resp.json();
+    renderCaseList();
+    updateScopeSelect();
+  } catch (err) {
+    console.error('Failed to load cases', err);
+  }
+}
+
+function renderCaseList() {
+  const list = document.getElementById('caseList');
+  document.getElementById('caseCount').textContent = `(${cases.length})`;
+
+  if (!cases.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🏛️</div>No cases indexed yet.<br>Upload a PDF to begin.</div>`;
+    return;
+  }
+
+  list.innerHTML = cases.map(c => {
+    const meta = c.metadata || {};
+    const name = meta.case_name || c.filename;
+    const court = meta.court || '';
+    const date  = meta.date  || '';
+    const isActive = c.id === selectedCaseId ? 'active' : '';
+    return `
+      <div class="case-card ${isActive}" onclick="selectCase('${c.id}')">
+        <div class="case-name">${escHtml(name)}</div>
+        <div class="case-meta">
+          <span class="case-court">${escHtml(court)}</span>
+          ${date ? ` · ${escHtml(date)}` : ''}
+        </div>
+        <div class="case-meta" style="margin-top:3px">${c.chunk_count} chunks indexed</div>
+        <div class="case-actions">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); selectAndSummarize('${c.id}')">📝 Summary</button>
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteCase('${c.id}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function selectCase(id) {
+  selectedCaseId = id;
+  renderCaseList();
+  updatePanelState();
+  // Clear previous results
+  document.getElementById('summaryCard').style.display = 'none';
+  document.getElementById('similarList').innerHTML = '';
+}
+
+function selectAndSummarize(id) {
+  selectCase(id);
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab=summary]').classList.add('active');
+  document.getElementById('panel-summary').classList.add('active');
+  generateSummary();
+}
+
+function updateScopeSelect() {
+  const sel = document.getElementById('scopeSelect');
+  sel.innerHTML = '<option value="">All cases</option>' +
+    cases.map(c => `<option value="${c.id}">${escHtml((c.metadata?.case_name || c.filename).slice(0,40))}</option>`).join('');
+  if (selectedCaseId) sel.value = selectedCaseId;
+}
+
+async function deleteCase(id) {
+  if (!confirm('Delete this case and all its embeddings?')) return;
+  await fetch(`${API}/cases/${id}`, { method: 'DELETE' });
+  if (selectedCaseId === id) selectedCaseId = null;
+  toast('Case deleted', 'success');
+  await loadCases();
+  updatePanelState();
+}
+
+/* ── Q&A ─────────────────────────────────────────────────── */
+async function askQuestion() {
+  const q    = document.getElementById('questionInput').value.trim();
+  const scope = document.getElementById('scopeSelect').value;
+  if (!q) return;
+
+  setLoading(true, 'Searching and generating answer…');
+
+  try {
+    const body = { question: q, top_k: 5 };
+    if (scope) body.case_id = scope;
+
+    const resp = await fetch(`${API}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail);
+
+    renderAnswer(data.answer, data.sources);
+  } catch (err) {
+    toast(`❌ ${err.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+function setQuestion(q) {
+  document.getElementById('questionInput').value = q;
+  document.getElementById('questionInput').focus();
+}
+
+function renderAnswer(answer, sources) {
+  const card = document.getElementById('answerCard');
+  card.classList.add('visible');
+  document.getElementById('answerText').innerHTML = markdownToHtml(answer);
+
+  const srcSec = document.getElementById('sourcesSection');
+  const srcList = document.getElementById('sourcesList');
+
+  if (sources && sources.length) {
+    srcSec.style.display = 'block';
+    srcList.innerHTML = sources.map(s => `
+      <div class="source-item">
+        <div class="source-header">
+          <div class="source-meta">
+            <span class="source-section">${escHtml(s.section || 'TEXT')}</span>
+            ${escHtml(s.metadata?.case_name || s.case_id)}
+            ${s.metadata?.court ? ` · ${escHtml(s.metadata.court)}` : ''}
+          </div>
+          <div class="source-score">${(s.score * 100).toFixed(0)}% match</div>
+        </div>
+        <div class="source-text">${escHtml(s.text.slice(0, 300))}${s.text.length > 300 ? '…' : ''}</div>
+      </div>`).join('');
+  } else {
+    srcSec.style.display = 'none';
+  }
+}
+
+/* ── Summary ─────────────────────────────────────────────── */
+async function generateSummary() {
+  if (!selectedCaseId) { toast('Select a case first', 'error'); return; }
+  setLoading(true, 'Generating case summary…');
+
+  try {
+    const resp = await fetch(`${API}/summarize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case_id: selectedCaseId }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail);
+
+    const card = document.getElementById('summaryCard');
+    card.style.display = 'block';
+    document.getElementById('summaryText').innerHTML = markdownToHtml(data.summary);
+  } catch (err) {
+    toast(`❌ ${err.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* ── Similar cases ───────────────────────────────────────── */
+async function findSimilar() {
+  if (!selectedCaseId) { toast('Select a case first', 'error'); return; }
+  setLoading(true, 'Finding similar cases…');
+
+  try {
+    const resp = await fetch(`${API}/similar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case_id: selectedCaseId, top_k: 5 }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail);
+
+    const list = document.getElementById('similarList');
+    if (!data.similar_cases.length) {
+      list.innerHTML = '<div class="empty-state">Upload more cases to find similar ones.</div>';
+      return;
+    }
+
+    list.innerHTML = data.similar_cases.map(sc => `
+      <div class="similar-card" onclick="selectCase('${sc.case_id}')">
+        <div class="similarity-bar-wrap">
+          <div class="similarity-pct">${sc.similarity_pct}</div>
+          <div class="similarity-label">similar</div>
+        </div>
+        <div class="similar-info">
+          <div class="similar-name">${escHtml(sc.metadata?.case_name || sc.filename)}</div>
+          <div class="similar-court">${escHtml(sc.metadata?.court || 'Unknown Court')} · ${escHtml(sc.metadata?.date || '')}</div>
+          ${sc.metadata?.subject_matter ? `<div style="font-size:11px;color:var(--sage);margin-top:3px;">${escHtml(sc.metadata.subject_matter)}</div>` : ''}
+        </div>
+      </div>`).join('');
+  } catch (err) {
+    toast(`❌ ${err.message}`, 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+/* ── Loading ──────────────────────────────────────────────── */
+let _loadingTimeout;
+function setLoading(on, msg = '') {
+  clearTimeout(_loadingTimeout);
+  if (on) {
+    document.getElementById('progressStatus').textContent = msg;
+    document.getElementById('uploadProgress').classList.add('visible');
+  } else {
+    _loadingTimeout = setTimeout(() => {
+      document.getElementById('uploadProgress').classList.remove('visible');
+    }, 400);
+  }
+}
+
+/* ── Toast ────────────────────────────────────────────────── */
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+/* ── Markdown → HTML ─────────────────────────────────────── */
+function markdownToHtml(md) {
+  if (!md) return '';
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^#### (.+)$/gm, '<h4 style="font-size:13px;font-weight:600;margin:12px 0 6px;">$1</h4>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^\d+\. (.+)$/gm, '<li style="list-style:decimal">$1</li>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li[^>]*>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(.+)$/gm, (l) => l.startsWith('<') ? l : `<p>${l}</p>`)
+    .replace(/<p><\/p>/g, '');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

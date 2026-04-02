@@ -1,0 +1,29 @@
+# Legal Case Intelligence System - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9    # required for file uploads
+
+# PDF parsing
+PyMuPDF==1.24.3            # fast PDF text extraction
+
+# Vector store
+faiss-cpu==1.8.0           # local FAISS index (no GPU needed)
+
+# Embeddings (free, local — no API key needed for basic use)
+sentence-transformers==3.0.1
+torch==2.3.0               # CPU only; remove for GPU build
+numpy==1.26.4
+
+# HTTP client (for LLM API calls)
+requests==2.32.2
+
+# Utilities
+pydantic==2.7.1
+
+# Optional: for better PDF parsing of complex layouts
+# pdfplumber==0.11.0
+
+google-genai
