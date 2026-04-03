@@ -143,6 +143,7 @@ class QueryRequest(BaseModel):
     question: str
     case_id: Optional[str] = None   # restrict search to one case
     top_k: int = 5
+    rerank: bool = False             # enable cross-encoder reranking
 
 
 @app.post("/query")
@@ -151,12 +152,26 @@ def query(req: QueryRequest):
     if not req.question.strip():
         raise HTTPException(400, "Question cannot be empty")
 
-    results = vector_store.search(req.question, top_k=req.top_k, case_id=req.case_id)
+    results = vector_store.search(
+        req.question,
+        top_k=req.top_k,
+        case_id=req.case_id,
+        rerank=req.rerank,
+    )
     if not results:
-        return {"answer": "No relevant content found. Please upload case PDFs first.", "sources": []}
+        return {
+            "answer": "No relevant content found. Please upload case PDFs first.",
+            "citations": [],
+            "sources": [],
+        }
 
-    answer = answer_question(req.question, results)
-    return {"answer": answer, "sources": results}
+    # answer_question now returns {"answer": str, "citations": [...]}
+    qa_result = answer_question(req.question, results)
+    return {
+        "answer":    qa_result["answer"],
+        "citations": qa_result["citations"],
+        "sources":   results,           # raw chunk results (backward-compatible)
+    }
 
 
 class SummarizeRequest(BaseModel):

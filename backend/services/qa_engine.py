@@ -1,6 +1,12 @@
 """
 QA Engine: question answering, case summarization, similar-case finder.
 Uses LLM over retrieved chunks.
+
+Upgrades:
+  - Structured context formatting (CASE / COURT / SECTION blocks)
+  - Improved system prompt: Issue → Analysis → Conclusion structure
+  - Citations returned alongside answer
+  - LLM token budget capped to avoid oversized prompts
 """
 
 import os
@@ -8,12 +14,21 @@ import re
 import json
 import requests
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+
+# ── constants ──────────────────────────────────────────────────────────────────
+
+# Maximum characters of chunk text sent to LLM per chunk (avoids bloated prompts)
+MAX_CHUNK_CHARS_FOR_LLM = 600
+
+# Maximum total context characters sent to LLM
+MAX_CONTEXT_CHARS = 6000
+
 
 # ── LLM call ──────────────────────────────────────────────────────────────────
 
 def _call_llm(system: str, user: str, max_tokens: int = 800) -> str:
-    """Call available LLM API. Priority: Anthropic → OpenAI → Gemini."""
+    """Call available LLM API. Priority: Anthropic -> OpenAI -> Gemini."""
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
     openai_key    = os.getenv("OPENAI_API_KEY")
     gemini_key    = os.getenv("GEMINI_API_KEY")
@@ -57,7 +72,6 @@ def _call_llm(system: str, user: str, max_tokens: int = 800) -> str:
     elif gemini_key:
         import google.generativeai as genai
         genai.configure(api_key=gemini_key)
-        # Gemini doesn't have a separate system role — prepend it to the user prompt
         model = genai.GenerativeModel(
             model_name="gemini-2.5-flash",
             system_instruction=system,
@@ -69,9 +83,8 @@ def _call_llm(system: str, user: str, max_tokens: int = 800) -> str:
         return response.text
 
     else:
-        # No LLM — return a descriptive fallback
         return (
-            "⚠️ No LLM API key configured. "
+            "No LLM API key configured. "
             "Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY to enable AI answers.\n\n"
             "**Relevant excerpts found:**\n\n"
         )
@@ -81,43 +94,65 @@ def _call_llm(system: str, user: str, max_tokens: int = 800) -> str:
 
 QA_SYSTEM = """You are an expert Indian legal assistant with deep knowledge of Indian constitutional law, civil and criminal procedure, and landmark Supreme Court and High Court judgments.
 
-When answering questions:
-- Be precise and cite specific legal principles
-- Reference court hierarchy (Supreme Court > High Courts > District Courts)
-- Mention relevant sections of Indian laws (IPC, CPC, CrPC, Constitution, etc.) when applicable
-- Use formal but accessible language
-- If uncertain, clearly state so
-- Structure longer answers with clear headings"""
+When answering questions, always structure your response under these three headings:
 
-def answer_question(question: str, retrieved_chunks: List[Dict[str, Any]]) -> str:
-    """Generate a legally-informed answer using retrieved chunks as context."""
-    context = _format_chunks_as_context(retrieved_chunks)
+**Issue**
+State the precise legal question raised.
 
-    user_prompt = f"""Based on the following excerpts from Indian court documents, answer the question below.
+**Analysis**
+- Cite the legal reasoning drawn from the provided excerpts.
+- Reference relevant sections of Indian law (IPC, CPC, CrPC, Constitution, etc.) where applicable.
+- Mention court hierarchy where relevant (Supreme Court > High Courts > District Courts).
+- Quote or paraphrase specific passages from the excerpts with attribution (e.g., "As held in [Case Name]...").
 
-RETRIEVED EXCERPTS:
+**Conclusion**
+Provide a clear, direct answer to the question.
+
+If uncertain about any point, explicitly say so. Use formal but accessible language."""
+
+
+def answer_question(
+    question: str,
+    retrieved_chunks: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Generate a legally-informed answer with source citations.
+
+    Returns:
+        {
+            "answer":    str,           # structured LLM response
+            "citations": List[dict]     # source references used
+        }
+    """
+    context, citations = _format_context_and_citations(retrieved_chunks)
+
+    user_prompt = f"""Using the excerpts below from Indian court documents, answer the question.
+
 {context}
 
 QUESTION: {question}
 
-Provide a structured, legally precise answer. If the excerpts directly address the question, quote or paraphrase the relevant parts. If asking about similar cases or arguments, synthesize patterns across the excerpts."""
+Structure your answer under: **Issue**, **Analysis**, **Conclusion**."""
 
     try:
-        return _call_llm(QA_SYSTEM, user_prompt, max_tokens=900)
+        answer = _call_llm(QA_SYSTEM, user_prompt, max_tokens=900)
     except Exception as e:
-        # Graceful degradation: return raw chunks
-        fallback = f"⚠️ LLM unavailable ({e}). Here are the most relevant excerpts:\n\n"
+        # Graceful degradation — surface raw excerpts if LLM is down
+        answer = f"LLM unavailable ({e}). Here are the most relevant excerpts:\n\n"
         for i, c in enumerate(retrieved_chunks[:3], 1):
-            fallback += f"**Excerpt {i}** (Section: {c.get('section','?')}, Score: {c['score']:.2f})\n"
-            fallback += c["text"][:400] + "...\n\n"
-        return fallback
+            answer += (
+                f"**Excerpt {i}** (Section: {c.get('section','?')}, Score: {c.get('score',0):.2f})\n"
+                + c["text"][:400] + "...\n\n"
+            )
+
+    return {"answer": answer, "citations": citations}
 
 
 # ── Summarization ──────────────────────────────────────────────────────────────
 
 SUMMARY_SYSTEM = """You are an expert Indian legal analyst. Generate comprehensive, structured case summaries that are useful to practising lawyers."""
 
-SUMMARY_PROMPT = """Summarize the following Indian court case based on these document excerpts. 
+SUMMARY_PROMPT = """Summarize the following Indian court case based on these document excerpts.
 Structure the summary under these exact headings (use markdown):
 
 ## Case Overview
@@ -151,17 +186,17 @@ DOCUMENT EXCERPTS:
 
 Provide a comprehensive summary suitable for inclusion in a legal brief."""
 
+
 def summarize_case(chunks: List[Dict[str, Any]], metadata: Dict[str, Any]) -> str:
-    """Generate structured case summary."""
-    # Use top chunks (first 8 most representative)
-    context   = _format_chunks_as_context(chunks[:8])
-    meta_str  = json.dumps(metadata, indent=2, ensure_ascii=False)
-    user_msg  = SUMMARY_PROMPT.format(metadata=meta_str, context=context)
+    """Generate structured case summary using top chunks."""
+    context, _ = _format_context_and_citations(chunks[:8])
+    meta_str    = json.dumps(metadata, indent=2, ensure_ascii=False)
+    user_msg    = SUMMARY_PROMPT.format(metadata=meta_str, context=context)
 
     try:
         return _call_llm(SUMMARY_SYSTEM, user_msg, max_tokens=1200)
     except Exception as e:
-        return f"⚠️ Summary generation failed: {e}\n\nMetadata: {meta_str}"
+        return f"Summary generation failed: {e}\n\nMetadata: {meta_str}"
 
 
 # ── Similar cases ──────────────────────────────────────────────────────────────
@@ -172,9 +207,7 @@ def find_similar_cases(
     all_cases: Dict[str, Any],
     top_k: int = 3,
 ) -> List[Dict[str, Any]]:
-    """
-    Find cases most similar to target_case_id using mean embedding cosine similarity.
-    """
+    """Find cases most similar to target using mean embedding cosine similarity."""
     target_vec = vector_store.get_case_embedding(target_case_id)
     if target_vec is None:
         return []
@@ -186,37 +219,79 @@ def find_similar_cases(
         vec = vector_store.get_case_embedding(case_id)
         if vec is None:
             continue
-        similarity = float(np.dot(target_vec, vec))   # both normalized → cosine sim
+        similarity = float(np.dot(target_vec, vec))
         scores.append((similarity, case_id, case_data))
 
     scores.sort(reverse=True)
 
-    results = []
-    for sim, cid, cdata in scores[:top_k]:
-        results.append({
+    return [
+        {
             "case_id":        cid,
             "filename":       cdata.get("filename"),
             "similarity":     round(sim, 4),
             "similarity_pct": f"{sim * 100:.1f}%",
             "metadata":       cdata.get("metadata", {}),
-        })
-
-    return results
+        }
+        for sim, cid, cdata in scores[:top_k]
+    ]
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
-def _format_chunks_as_context(chunks: List[Dict[str, Any]]) -> str:
-    parts = []
+def _format_context_and_citations(
+    chunks: List[Dict[str, Any]],
+) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Build a structured context string for the LLM and a citations list for the caller.
+
+    Context block format per chunk:
+        -- [N] ------------------------------------------
+        CASE:    <case_name>
+        COURT:   <court>
+        SECTION: <section>
+
+        <chunk text (capped at MAX_CHUNK_CHARS_FOR_LLM)>
+
+    Citations list entry:
+        {"case_name": ..., "court": ..., "section": ..., "text": <300-char preview>}
+    """
+    parts: List[str] = []
+    citations: List[Dict[str, Any]] = []
+    total_chars = 0
+
     for i, chunk in enumerate(chunks, 1):
-        meta = chunk.get("metadata", {})
-        case_name   = meta.get("case_name", "Unknown Case")
-        court       = meta.get("court", "")
-        section     = chunk.get("section", "")
-        score       = chunk.get("score")
-        score_str   = f" | Relevance: {score:.2f}" if score is not None else ""
+        meta      = chunk.get("metadata", {})
+        case_name = meta.get("case_name") or chunk.get("case_id", "Unknown Case")
+        court     = meta.get("court", "")
+        section   = chunk.get("section", "")
+        score     = chunk.get("score")
+        score_str = f" | Score: {score:.2f}" if score is not None else ""
 
-        header = f"[{i}] {case_name} | {court} | {section}{score_str}"
-        parts.append(f"{header}\n{chunk['text']}")
+        # Cap individual chunk length to control total prompt size
+        text = chunk["text"][:MAX_CHUNK_CHARS_FOR_LLM]
+        if len(chunk["text"]) > MAX_CHUNK_CHARS_FOR_LLM:
+            text += "..."
 
-    return "\n\n---\n\n".join(parts)
+        block = (
+            f"-- [{i}]{score_str} ------------------------------------------\n"
+            f"CASE:    {case_name}\n"
+            f"COURT:   {court}\n"
+            f"SECTION: {section}\n\n"
+            f"{text}"
+        )
+
+        # Stop adding chunks once total context budget is exhausted
+        if total_chars + len(block) > MAX_CONTEXT_CHARS:
+            break
+
+        parts.append(block)
+        total_chars += len(block)
+
+        citations.append({
+            "case_name": case_name,
+            "court":     court,
+            "section":   section,
+            "text":      chunk["text"][:300],   # short preview for frontend display
+        })
+
+    return "\n\n".join(parts), citations
